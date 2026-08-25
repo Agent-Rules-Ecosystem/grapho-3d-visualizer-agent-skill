@@ -1,0 +1,6 @@
+---
+description: Rule for Grapho 3D Visualizer HTML generation.
+globs: ["**/overview/grapho/grapho_visualizer.html"]
+---
+
+Run `.skill/grapho-3d-visualizer-agent-skill/scripts/generate_visualizer.py` to update the 3D visualization dashboard.
