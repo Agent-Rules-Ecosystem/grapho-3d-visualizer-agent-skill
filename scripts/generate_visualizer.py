@@ -2,6 +2,7 @@
 """
 generate_visualizer.py — Generates `overview/grapho/grapho_visualizer.html` from `overview/grapho/grapho_data.json`.
 Supports two themes: 'scifi' (Sci-Fi Constellation) and 'rpg' (Medieval RPG Waifu Sprites).
+If `grapho_data.json` is missing, renders an interactive "Fog of War / Unexplored Territory" state asking to run `$grapho`.
 """
 
 import os
@@ -38,7 +39,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       padding: 16px 20px;
       box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
       backdrop-filter: blur(10px);
-      max-width: 320px;
+      max-width: 340px;
     }}
     h2 {{
       margin: 0 0 8px 0;
@@ -56,6 +57,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       font-size: 0.8rem;
       margin-right: 6px;
       margin-bottom: 6px;
+    }}
+    .alert-banner {{
+      background: rgba(255, 0, 85, 0.2);
+      border: 1px solid #ff0055;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      margin-top: 10px;
+      color: #ff99bb;
     }}
     #info-card {{
       position: absolute;
@@ -82,6 +92,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <span class="stat-badge" style="border-color: #ff0055; color: #ff0055;">Monolitos: <strong>{monolith_count}</strong></span>
       <span class="stat-badge">Tema: <strong>{theme_name}</strong></span>
     </div>
+    {banner_html}
     <p style="font-size: 0.8rem; color: #8899ac; margin-top: 10px;">
       Haz clic y arrastra para orbitar en 3D. Haz clic en un nodo para inspeccionar detalles.
     </p>
@@ -97,11 +108,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <script>
     const graphData = {graph_data_json};
     const theme = "{theme}";
+    const isUnexplored = {is_unexplored_js};
 
     // Setup Scene, Camera, Renderer
     const container = document.getElementById('canvas-container');
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x050508, 0.002);
+    scene.fog = new THREE.FogExp2(isUnexplored ? 0x1a0a2a : 0x050508, 0.003);
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
     camera.position.set(0, 100, 250);
@@ -116,8 +128,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     controls.dampingFactor = 0.05;
 
     // Ambient & Point Lights
-    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-    const pointLight = new THREE.PointLight(0x00f0ff, 2, 500);
+    scene.add(new THREE.AmbientLight(0xffffff, isUnexplored ? 0.4 : 0.8));
+    const pointLight = new THREE.PointLight(isUnexplored ? 0xff0055 : 0x00f0ff, 2, 500);
     pointLight.position.set(0, 50, 0);
     scene.add(pointLight);
 
@@ -128,16 +140,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       'data': 0xa855f7,
       'core': 0xffd700,
       'root': 0xffa500,
+      'unexplored': 0xff0055,
       'other': 0x8899ac
     }};
 
-    // Position Nodes in 3D Space by Layer
     const layerRadius = {{
       'root': 0,
       'domain': 40,
       'presentation': 90,
       'data': 140,
       'core': 180,
+      'unexplored': 70,
       'other': 220
     }};
 
@@ -152,7 +165,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const z = Math.sin(angle) * radius + (Math.random() - 0.5) * 20;
 
       let mesh;
-      const color = node.is_monolith ? 0xff0055 : (layerColors[node.layer] || 0x00f0ff);
+      const color = node.is_monolith || isUnexplored ? 0xff0055 : (layerColors[node.layer] || 0x00f0ff);
 
       if (theme === 'rpg') {{
         // 2.5D Sprite Mesh
@@ -165,20 +178,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         ctx.arc(64, 64, 50, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 20px sans-serif';
+        ctx.font = 'bold 24px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const roleIcon = node.layer === 'presentation' ? '🧙‍♀️' : node.layer === 'domain' ? '⚔️' : node.layer === 'data' ? '🧪' : '👑';
+        const roleIcon = isUnexplored ? '🌫️' : (node.layer === 'presentation' ? '🧙‍♀️' : node.layer === 'domain' ? '⚔️' : node.layer === 'data' ? '🧪' : '👑');
         ctx.fillText(roleIcon, 64, 64);
 
         const texture = new THREE.CanvasTexture(canvas);
         const material = new THREE.SpriteMaterial({{ map: texture }});
         mesh = new THREE.Sprite(material);
-        mesh.scale.set(20, 20, 1);
+        mesh.scale.set(22, 22, 1);
       }} else {{
         // Sci-Fi Glowing Sphere Node
-        const geometry = new THREE.SphereGeometry(node.is_monolith ? 6 : 3.5, 16, 16);
-        const material = new THREE.MeshBasicMaterial({{ color: color, wireframe: false }});
+        const geometry = new THREE.SphereGeometry(isUnexplored ? 7 : (node.is_monolith ? 6 : 3.5), 16, 16);
+        const material = new THREE.MeshBasicMaterial({{ color: color, wireframe: isUnexplored }});
         mesh = new THREE.Mesh(geometry, material);
       }}
 
@@ -190,7 +203,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }});
 
     // Draw Beam Edges
-    const lineMaterial = new THREE.LineBasicMaterial({{ color: 0x00f0ff, transparent: true, opacity: 0.3 }});
+    const lineMaterial = new THREE.LineBasicMaterial({{ color: isUnexplored ? 0xff0055 : 0x00f0ff, transparent: true, opacity: 0.3 }});
     graphData.edges.forEach(edge => {{
       const src = nodeMap[edge.from];
       const dst = nodeMap[edge.to];
@@ -218,7 +231,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <strong>Ruta:</strong> ${{node.id}}<br>
           <strong>Capa:</strong> ${{node.layer}}<br>
           <strong>Líneas:</strong> ${{node.lines}}<br>
-          <strong>Estado:</strong> ${{node.is_monolith ? '🚨 Monolito (>300L)' : '✅ Saludable'}}
+          <strong>Estado:</strong> ${{isUnexplored ? '🌫️ Niebla de Guerra / Ejecuta $grapho' : (node.is_monolith ? '🚨 Monolito (>300L)' : '✅ Saludable')}}
         `;
         document.getElementById('info-card').style.display = 'block';
       }}
@@ -228,7 +241,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     function animate() {{
       requestAnimationFrame(animate);
       controls.update();
-      scene.rotation.y += 0.0005;
+      scene.rotation.y += isUnexplored ? 0.002 : 0.0005;
       renderer.render(scene, camera);
     }}
     animate();
@@ -243,26 +256,70 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
+def build_unexplored_fallback(target_dir):
+    # Try reading overview/architecture.md if present
+    arch_md = os.path.join(target_dir, 'overview', 'architecture.md')
+    sys_md = os.path.join(target_dir, 'overview', 'system_overview.md')
+
+    summary_note = "Archivos aún no escaneados por $grapho."
+    if os.path.exists(arch_md):
+        summary_note = "Detectada arquitectura general en overview/architecture.md."
+    elif os.path.exists(sys_md):
+        summary_note = "Detectada vista general en overview/system_overview.md."
+
+    return {
+        "project_name": os.path.basename(os.path.abspath(target_dir)) + " (Sin Escanear)",
+        "stack": "unknown",
+        "is_unexplored": True,
+        "metrics": {
+            "total_files": "?",
+            "total_lines": "?",
+            "monolith_count": "?"
+        },
+        "nodes": [
+            {"id": "unexplored_presentation", "label": "❓ Zona Niebla — UI/Presentation", "layer": "unexplored", "lines": 0, "is_monolith": False},
+            {"id": "unexplored_domain", "label": "❓ Zona Niebla — Domain", "layer": "unexplored", "lines": 0, "is_monolith": False},
+            {"id": "unexplored_data", "label": "❓ Zona Niebla — Data/DB", "layer": "unexplored", "lines": 0, "is_monolith": False},
+            {"id": "unexplored_core", "label": "❓ Zona Niebla — Core Root", "layer": "unexplored", "lines": 0, "is_monolith": False}
+        ],
+        "edges": [
+            {"from": "unexplored_presentation", "to": "unexplored_domain", "type": "unexplored"},
+            {"from": "unexplored_data", "to": "unexplored_domain", "type": "unexplored"},
+            {"from": "unexplored_core", "to": "unexplored_presentation", "type": "unexplored"}
+        ],
+        "summary_note": summary_note
+    }
+
 def generate_html_visualizer(target_dir='.', theme='scifi'):
     json_path = os.path.join(target_dir, 'overview', 'grapho', 'grapho_data.json')
+    is_unexplored = False
     
-    if not os.path.exists(json_path):
-        print(f"❌ Error: {json_path} no existe. Ejecuta $grapho primero para escanear el proyecto.")
-        sys.exit(1)
-
-    with open(json_path, 'r', encoding='utf-8') as f:
-        graph_data = json.load(f)
+    if os.path.exists(json_path):
+        with open(json_path, 'r', encoding='utf-8') as f:
+            graph_data = json.load(f)
+    else:
+        graph_data = build_unexplored_fallback(target_dir)
+        is_unexplored = True
 
     metrics = graph_data.get('metrics', {})
     theme_name = 'Medieval RPG Waifus 2.5D' if theme == 'rpg' else 'Sci-Fi Constellation 3D'
 
+    banner_html = ""
+    if isUnexplored := graph_data.get('is_unexplored', False):
+        if theme == 'rpg':
+            banner_html = '<div class="alert-banner">🌫️ <strong>Niebla de Guerra:</strong> Territorio no explorado. Ejecuta <code>$grapho</code> para revelar el mapa real.</div>'
+        else:
+            banner_html = '<div class="alert-banner">📡 <strong>Transmisión Incompleta:</strong> Señal no escaneada. Ejecuta <code>$grapho</code> para sincronizar la telemetría.</div>'
+
     html_content = HTML_TEMPLATE.format(
         project_name=graph_data.get('project_name', 'Proyecto'),
-        total_files=metrics.get('total_files', 0),
-        total_lines=metrics.get('total_lines', 0),
-        monolith_count=metrics.get('monolith_count', 0),
+        total_files=metrics.get('total_files', '?'),
+        total_lines=metrics.get('total_lines', '?'),
+        monolith_count=metrics.get('monolith_count', '?'),
         theme_name=theme_name,
         theme=theme,
+        banner_html=banner_html,
+        is_unexplored_js="true" if is_unexplored else "false",
         graph_data_json=json.dumps(graph_data)
     )
 
@@ -273,8 +330,10 @@ def generate_html_visualizer(target_dir='.', theme='scifi'):
     with open(output_html, 'w', encoding='utf-8') as f:
         f.write(html_content)
 
-    print(f"✨ [Grapho 3D] Visualizador generado exitosamente en: {output_html}")
-    print(f"🌐 Abre el archivo con tu navegador para ver la experiencia 3D ({theme_name}).")
+    if is_unexplored:
+        print(f"🌫️ [Grapho 3D] Generado en modo 'Niebla de Guerra' (Sin escanear). Abre {output_html}")
+    else:
+        print(f"✨ [Grapho 3D] Visualizador generado exitosamente en: {output_html}")
 
 if __name__ == '__main__':
     target = sys.argv[1] if len(sys.argv) > 1 else '.'
