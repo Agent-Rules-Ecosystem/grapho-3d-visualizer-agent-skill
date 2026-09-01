@@ -31,9 +31,22 @@
 
 ---
 
-## 📦 Instalación como Submódulo
+## ⚡ Quick Start
 
+**1. Instala la skill como submódulo**
 ```bash
-mkdir -p .skill
-git submodule add https://github.com/Agent-Rules-Ecosystem/grapho-3d-visualizer-agent-skill.git .skill/grapho-3d-visualizer-agent-skill
+git submodule add git@github.com:Agent-Rules-Ecosystem/grapho-3d-visualizer-agent-skill.git .skill/grapho-3d-visualizer-agent-skill
 ```
+
+**2. Activa la skill con `$boot`**
+```text
+$boot
+```
+
+**3. Ejecuta el primer comando de la skill**
+```text
+$grapho3d:serve
+```
+
+---
+
